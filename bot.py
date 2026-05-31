@@ -24,8 +24,6 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Инициализация ──────────────────────────────────────────────────────
-# Groq используется через прямые HTTP запросы
-
 WAITING_BIRTH_DATE = 1
 WAITING_BIRTH_TIME = 2
 WAITING_BIRTH_PLACE = 3
@@ -75,11 +73,10 @@ def build_system_prompt(user_data: dict) -> str:
 Не давай общих слов. Только конкретика джйотиш."""
 
 
-# ── Вызов Gemini API ───────────────────────────────────────────────────
+# ── Вызов Groq API ─────────────────────────────────────────────────────
 async def call_gemini(system_prompt: str, user_message: str, user_id: int) -> str:
     history = db.get_history(user_id, limit=6)
 
-    # Gemini принимает историю в своём формате
     chat_history = []
     for msg in history:
         role = "user" if msg["role"] == "user" else "model"
@@ -345,19 +342,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Запуск ─────────────────────────────────────────────────────────────
 def main():
-    # Убираем прокси из окружения — Telegram должен работать напрямую
-    os.environ.pop("HTTPS_PROXY", None)
-    os.environ.pop("HTTP_PROXY", None)
-    os.environ.pop("ALL_PROXY", None)
-    os.environ.pop("all_proxy", None)
-    os.environ.pop("https_proxy", None)
-    os.environ.pop("http_proxy", None)
-
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise ValueError("Укажи TELEGRAM_BOT_TOKEN")
-    if not os.environ.get("GEMINI_API_KEY"):
-        raise ValueError("Укажи GEMINI_API_KEY")
+    if not os.environ.get("GROQ_API_KEY"):
+        raise ValueError("Укажи GROQ_API_KEY")
 
     app = Application.builder().token(token).build()
 
@@ -376,7 +365,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    logger.info("🔱 Джйотиш бот запущен (Gemini)")
+    logger.info("🔱 Джйотиш бот запущен (Groq)")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

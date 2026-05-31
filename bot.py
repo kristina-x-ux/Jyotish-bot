@@ -24,18 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Инициализация ──────────────────────────────────────────────────────
-import httpx
-
-proxy_url = os.environ.get("HTTPS_PROXY", "http://103.149.162.195:80")
-_gemini_transport = httpx.Client(
-    proxy=proxy_url,
-    timeout=30.0
-)
-genai.configure(
-    api_key=os.environ["GEMINI_API_KEY"],
-    client_options={"api_endpoint": "generativelanguage.googleapis.com"},
-    transport=_gemini_transport
-)
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 gemini = genai.GenerativeModel("gemini-2.0-flash")
 
 WAITING_BIRTH_DATE = 1
@@ -98,15 +87,21 @@ async def call_gemini(system_prompt: str, user_message: str, user_id: int) -> st
         chat_history.append({"role": role, "parts": [msg["content"]]})
 
     try:
-        chat = gemini.start_chat(history=chat_history)
-        full_message = f"{system_prompt}\n\n---\n\n{user_message}"
-        # Системный промпт передаём только в первом сообщении или если история пуста
-        if not chat_history:
-            response = await chat.send_message_async(full_message)
-        else:
-            response = await chat.send_message_async(user_message)
+        import aiohttp
+        api_key = os.environ["GEMINI_API_KEY"]
+        proxy = os.environ.get("GEMINI_PROXY", "http://103.149.162.195:80")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
 
-        reply = response.text
+        messages = list(chat_history)
+        full_message = f"{system_prompt}\n\n---\n\n{user_message}" if not chat_history else user_message
+        messages.append({"role": "user", "parts": [{"text": full_message}]})
+        payload = {"contents": messages}
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, proxy=proxy, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                data = await resp.json()
+
+        reply = data["candidates"][0]["content"]["parts"][0]["text"]
         db.save_message(user_id, "user", user_message)
         db.save_message(user_id, "assistant", reply)
         return reply
@@ -340,10 +335,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Запуск ─────────────────────────────────────────────────────────────
 def main():
-    # Убираем прокси из окружения чтобы Telegram не использовал его
+    # Убираем прокси из окружения — Telegram должен работать напрямую
     os.environ.pop("HTTPS_PROXY", None)
     os.environ.pop("HTTP_PROXY", None)
     os.environ.pop("ALL_PROXY", None)
+    os.environ.pop("all_proxy", None)
+    os.environ.pop("https_proxy", None)
+    os.environ.pop("http_proxy", None)
 
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:

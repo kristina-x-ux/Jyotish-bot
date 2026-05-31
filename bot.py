@@ -1,14 +1,14 @@
 """
 ╔══════════════════════════════════════╗
 ║   ДЖЙОТИШ ТРАНЗИТ БОТ — bot.py      ║
-║   Powered by Google Gemini (FREE)    ║
+║   Powered by Groq (FREE)             ║
 ╚══════════════════════════════════════╝
 """
 
 import logging
 import os
 from datetime import datetime
-import google.generativeai as genai
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -24,8 +24,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Инициализация ──────────────────────────────────────────────────────
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-gemini = genai.GenerativeModel("gemini-2.0-flash")
+# Groq используется через прямые HTTP запросы
 
 WAITING_BIRTH_DATE = 1
 WAITING_BIRTH_TIME = 2
@@ -88,25 +87,36 @@ async def call_gemini(system_prompt: str, user_message: str, user_id: int) -> st
 
     try:
         import aiohttp
-        api_key = os.environ["GEMINI_API_KEY"]
-        proxy = os.environ.get("GEMINI_PROXY", "http://103.149.162.195:80")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+        api_key = os.environ["GROQ_API_KEY"]
+        url = "https://api.groq.com/openai/v1/chat/completions"
 
-        messages = list(chat_history)
-        full_message = f"{system_prompt}\n\n---\n\n{user_message}" if not chat_history else user_message
-        messages.append({"role": "user", "parts": [{"text": full_message}]})
-        payload = {"contents": messages}
+        messages = [{"role": "system", "content": system_prompt}]
+        for msg in chat_history:
+            role = "user" if msg["role"] == "user" else "assistant"
+            messages.append({"role": role, "content": msg["parts"][0]})
+        messages.append({"role": "user", "content": user_message})
+
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": messages,
+            "max_tokens": 1024,
+            "temperature": 0.7
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
 
         async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload, proxy=proxy, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.post(url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                 data = await resp.json()
 
-        reply = data["candidates"][0]["content"]["parts"][0]["text"]
+        reply = data["choices"][0]["message"]["content"]
         db.save_message(user_id, "user", user_message)
         db.save_message(user_id, "assistant", reply)
         return reply
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
+        logger.error(f"Groq API error: {e}")
         return "❌ Ошибка API. Попробуй ещё раз."
 
 

@@ -24,7 +24,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Инициализация ──────────────────────────────────────────────────────
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+import httpx
+proxy_url = os.environ.get("HTTPS_PROXY", "http://103.149.162.195:80")
+genai.configure(api_key=os.environ["GEMINI_API_KEY"], transport=httpx.Client(proxy=proxy_url))
 gemini = genai.GenerativeModel("gemini-2.0-flash")
 
 WAITING_BIRTH_DATE = 1
@@ -69,7 +71,7 @@ def build_system_prompt(user_data: dict) -> str:
 5. Учитывай силу планет: уччха, нича, сваграха
 6. Если есть натальные данные — соотноси транзиты с натальными домами и Дашей
 7. Отвечай кратко и по делу — не более 300 слов, структурированно
-8. Используй эмодзи: ☀️ Солнце, 🌙 Луна, 🔴 Марс, 🟡 Меркурий, 🟠 Юпитер, ⚪ Венера, 🟤 Сатурни, ☊ Раху, ☋ Кету
+8. Используй эмодзи: ☀️ Сурья, 🌙 Чандра, 🔴 Мангал, 🟡 Будха, 🟠 Гуру, ⚪ Шукра, 🟤 Шани, ☊ Раху, ☋ Кету
 9. Отвечай на русском языке
 10. В конце — кратко: БЛАГОПРИЯТНО / НЕЙТРАЛЬНО / ТРЕБУЕТ ВНИМАНИЯ
 
@@ -146,8 +148,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             "✍️ Напиши свой вопрос.\n\n"
             "Например:\n"
-            "• _Как Сатурн в овне влияет на карьеру?_\n"
-            "• _Что означает Раху в близнецах?_\n"
+            "• _Как Шани в Кумбхе влияет на карьеру?_\n"
+            "• _Что означает Раху в Меше?_\n"
             "• _Благоприятный период для бизнеса?_",
             parse_mode="Markdown"
         )
@@ -358,3 +360,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

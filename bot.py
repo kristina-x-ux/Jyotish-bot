@@ -25,8 +25,17 @@ logger = logging.getLogger(__name__)
 
 # ── Инициализация ──────────────────────────────────────────────────────
 import httpx
+
 proxy_url = os.environ.get("HTTPS_PROXY", "http://103.149.162.195:80")
-genai.configure(api_key=os.environ["GEMINI_API_KEY"], transport=httpx.Client(proxy=proxy_url))
+_gemini_transport = httpx.Client(
+    proxy=proxy_url,
+    timeout=30.0
+)
+genai.configure(
+    api_key=os.environ["GEMINI_API_KEY"],
+    client_options={"api_endpoint": "generativelanguage.googleapis.com"},
+    transport=_gemini_transport
+)
 gemini = genai.GenerativeModel("gemini-2.0-flash")
 
 WAITING_BIRTH_DATE = 1
@@ -331,6 +340,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Запуск ─────────────────────────────────────────────────────────────
 def main():
+    # Убираем прокси из окружения чтобы Telegram не использовал его
+    os.environ.pop("HTTPS_PROXY", None)
+    os.environ.pop("HTTP_PROXY", None)
+    os.environ.pop("ALL_PROXY", None)
+
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token:
         raise ValueError("Укажи TELEGRAM_BOT_TOKEN")

@@ -157,4 +157,4 @@ class Database:
     # Оставляем для совместимости
     def save_user_natal(self, user_id: int, data: dict):
         self.save_card(user_id, data)
-    
+        

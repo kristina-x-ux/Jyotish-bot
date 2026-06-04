@@ -425,28 +425,6 @@ async def start_natal_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["person_name"] = update.message.text.strip()
-    await update.message.reply_text("📆 На сколько дней вперёд искать? (7–90)\nНапример: `30`")
-        return WAITING_MUHURTA_DAYS
-    except ValueError:
-        await update.message.reply_text("❌ Формат: `ДД.ММ.ГГГГ`", parse_mode="Markdown")
-        return WAITING_MUHURTA_DATE
-
-async def receive_muhurta_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        days = int(update.message.text.strip())
-        if not 1 <= days <= 90: raise ValueError
-    except ValueError:
-        await update.message.reply_text("❌ Введи число от 7 до 90")
-        return WAITING_MUHURTA_DAYS
-    et = context.user_data.get("muhurta_type","бизнес")
-    sd = context.user_data.get("muhurta_start")
-    await update.message.reply_text("⏳ Ищу благоприятные даты...")
-    result = calculate_muhurta(et, sd, days)
-    await update.message.reply_text(result, parse_mode="Markdown")
-    return ConversationHandler.END
-
-async def receive_compat_c2_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["c2_name"] = update.message.text.strip()
     await update.message.reply_text("📅 Дата рождения `ДД.ММ.ГГГГ`", parse_mode="Markdown")
     return WAITING_COMPAT_C2_DATE
 

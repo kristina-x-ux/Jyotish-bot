@@ -425,7 +425,37 @@ async def start_natal_setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def receive_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["person_name"] = update.message.text.strip()
-    await update.message.reply_text("⏰ Время рождения `ЧЧ:ММ` или `0`", parse_mode="Markdown")
+    await update.message.reply_text("📆 На сколько дней вперёд искать? (7–90)\nНапример: `30`")
+        return WAITING_MUHURTA_DAYS
+    except ValueError:
+        await update.message.reply_text("❌ Формат: `ДД.ММ.ГГГГ`", parse_mode="Markdown")
+        return WAITING_MUHURTA_DATE
+
+async def receive_muhurta_days(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        days = int(update.message.text.strip())
+        if not 1 <= days <= 90: raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ Введи число от 7 до 90")
+        return WAITING_MUHURTA_DAYS
+    et = context.user_data.get("muhurta_type","бизнес")
+    sd = context.user_data.get("muhurta_start")
+    await update.message.reply_text("⏳ Ищу благоприятные даты...")
+    result = calculate_muhurta(et, sd, days)
+    await update.message.reply_text(result, parse_mode="Markdown")
+    return ConversationHandler.END
+
+async def receive_compat_c2_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["c2_name"] = update.message.text.strip()
+    await update.message.reply_text("📅 Дата рождения `ДД.ММ.ГГГГ`", parse_mode="Markdown")
+    return WAITING_COMPAT_C2_DATE
+
+async def receive_compat_c2_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    try:
+        datetime.strptime(text,"%d.%m.%Y")
+        context.user_data["c2_date"] = text
+        await update.message.reply_text("⏰ Время рождения `ЧЧ:ММ` или `0`", parse_mode="Markdown")
         return WAITING_COMPAT_C2_TIME
     except ValueError:
         await update.message.reply_text("❌ Формат: `ДД.ММ.ГГГГ`", parse_mode="Markdown")
@@ -493,19 +523,21 @@ async def cmd_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ── Запуск ────────────────────────────────────────────────────────────
-async def scheduled_broadcast_job(app):
-    await post_to_group(app)
-
 def main():
     token = os.environ.get("TELEGRAM_BOT_TOKEN")
     if not token: raise ValueError("Укажи TELEGRAM_BOT_TOKEN")
     if not os.environ.get("GROQ_API_KEY"): raise ValueError("Укажи GROQ_API_KEY")
 
-    app = Application.builder().token(token).job_queue(None).build()
+    app = Application.builder().token(token).build()
+
+    # Расписание 12:00 МСК через APScheduler
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    import pytz
-    scheduler = AsyncIOScheduler(timezone=pytz.timezone("Europe/Moscow"))
-    scheduler.add_job(lambda: app.create_task(scheduled_broadcast_job(app)), "cron", hour=12, minute=0)
+    scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
+
+    async def broadcast_job():
+        await post_to_group(app)
+
+    scheduler.add_job(broadcast_job, "cron", hour=12, minute=0)
     scheduler.start()
 
 

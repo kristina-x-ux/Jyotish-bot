@@ -1,11 +1,10 @@
 """
 ╔══════════════════════════════════════╗
-║   БАЗА ДАННЫХ — database.py          ║
+║   БАЗА ДАННЫХ — database.py v3       ║
 ╚══════════════════════════════════════╝
 """
 
 import sqlite3
-import json
 from datetime import datetime
 from typing import Optional
 
@@ -22,10 +21,10 @@ class Database:
 
     def _init_db(self):
         with self._conn() as conn:
+            # Создаём таблицы
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     user_id     INTEGER PRIMARY KEY,
-                    active_card_id INTEGER,
                     created_at  TEXT DEFAULT (datetime('now')),
                     updated_at  TEXT DEFAULT (datetime('now'))
                 );
@@ -43,6 +42,9 @@ class Database:
                     moon_nakshatra TEXT,
                     mahadasha   TEXT,
                     antardasha  TEXT,
+                    timezone    TEXT,
+                    lat         REAL,
+                    lon_geo     REAL,
                     created_at  TEXT DEFAULT (datetime('now'))
                 );
 
@@ -61,6 +63,21 @@ class Database:
                     ON cards(user_id);
             """)
 
+            # Миграции — добавляем колонки если нет
+            migrations = [
+                "ALTER TABLE users ADD COLUMN active_card_id INTEGER",
+                "ALTER TABLE cards ADD COLUMN timezone TEXT",
+                "ALTER TABLE cards ADD COLUMN lat REAL",
+                "ALTER TABLE cards ADD COLUMN lon_geo REAL",
+                "ALTER TABLE cards ADD COLUMN birth_place_full TEXT",
+                "ALTER TABLE cards ADD COLUMN lagna_rashi INTEGER",
+            ]
+            for sql in migrations:
+                try:
+                    conn.execute(sql)
+                except Exception:
+                    pass  # Колонка уже существует
+
     def ensure_user(self, user_id: int):
         with self._conn() as conn:
             conn.execute(
@@ -77,14 +94,30 @@ class Database:
 
     # ── Карты ──────────────────────────────────────────────────────────
     def save_card(self, user_id: int, data: dict) -> int:
-        """Сохраняет новую карту, возвращает её id"""
         with self._conn() as conn:
             cursor = conn.execute("""
                 INSERT INTO cards (user_id, person_name, birth_date, birth_time, birth_place,
-                    lagna, sun_sign, moon_sign, moon_nakshatra, mahadasha, antardasha)
+                    lagna, sun_sign, moon_sign, moon_nakshatra, mahadasha, antardasha,
+                    timezone, lat, lon_geo)
                 VALUES (:user_id, :person_name, :birth_date, :birth_time, :birth_place,
-                    :lagna, :sun_sign, :moon_sign, :moon_nakshatra, :mahadasha, :antardasha)
-            """, {"user_id": user_id, **data})
+                    :lagna, :sun_sign, :moon_sign, :moon_nakshatra, :mahadasha, :antardasha,
+                    :timezone, :lat, :lon_geo)
+            """, {
+                "user_id": user_id,
+                "person_name": data.get("person_name",""),
+                "birth_date":  data.get("birth_date",""),
+                "birth_time":  data.get("birth_time"),
+                "birth_place": data.get("birth_place_full") or data.get("birth_place",""),
+                "lagna":       data.get("lagna",""),
+                "sun_sign":    data.get("sun_sign",""),
+                "moon_sign":   data.get("moon_sign",""),
+                "moon_nakshatra": data.get("moon_nakshatra",""),
+                "mahadasha":   data.get("mahadasha",""),
+                "antardasha":  data.get("antardasha",""),
+                "timezone":    data.get("timezone",""),
+                "lat":         data.get("lat", 0),
+                "lon_geo":     data.get("lon_geo", 0),
+            })
             return cursor.lastrowid
 
     def get_all_cards(self, user_id: int) -> list:
@@ -125,7 +158,6 @@ class Database:
                 "DELETE FROM cards WHERE id = ? AND user_id = ?",
                 (card_id, user_id)
             )
-            # Если удалили активную — сбросить
             conn.execute("""
                 UPDATE users SET active_card_id = NULL
                 WHERE user_id = ? AND active_card_id = ?
@@ -145,7 +177,7 @@ class Database:
                 )
             """, (user_id,))
 
-    def get_history(self, user_id: int, limit: int = 6) -> list[dict]:
+    def get_history(self, user_id: int, limit: int = 8) -> list:
         with self._conn() as conn:
             rows = conn.execute("""
                 SELECT role, content FROM messages
@@ -154,7 +186,7 @@ class Database:
             """, (user_id, limit)).fetchall()
             return [dict(r) for r in reversed(rows)]
 
-    # Оставляем для совместимости
+    # Совместимость
     def save_user_natal(self, user_id: int, data: dict):
         self.save_card(user_id, data)
         

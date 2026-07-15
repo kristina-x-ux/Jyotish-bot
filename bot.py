@@ -779,6 +779,15 @@ def main():
         per_message=False,
     )
 
+    varsha_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(cb_handler, pattern="^varsha_card:")],
+        states={
+            WAITING_VARSHA_YEAR: [MessageHandler(txt, got_varsha_year)],
+        },
+        fallbacks=[CommandHandler("cancel", cancel)],
+        per_message=False,
+    )
+
     muhurta_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(cb_handler, pattern="^mtype:")],
         states={
